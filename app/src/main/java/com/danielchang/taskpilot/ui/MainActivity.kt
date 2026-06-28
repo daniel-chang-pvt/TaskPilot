@@ -1,4 +1,4 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.ui
 
 import android.Manifest
 import android.app.Activity
@@ -25,10 +25,35 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
+import com.danielchang.taskpilot.R
+import com.danielchang.taskpilot.data.RuleRepository
+import com.danielchang.taskpilot.engine.RuleEngine
+import com.danielchang.taskpilot.model.ActionConfig
+import com.danielchang.taskpilot.model.ActionType
+import com.danielchang.taskpilot.model.AutomationRule
+import com.danielchang.taskpilot.model.ConditionConfig
+import com.danielchang.taskpilot.model.ConditionType
+import com.danielchang.taskpilot.model.TriggerConfig
+import com.danielchang.taskpilot.model.TriggerType
+import com.danielchang.taskpilot.model.isEnglish
+import com.danielchang.taskpilot.model.label
+import com.danielchang.taskpilot.scheduler.AutomationScheduler
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * 主界面层。
+ *
+ * 这个 Activity 只负责使用原生 View 组装页面和收集用户输入；它不直接判断条件、不直接执行系统动作、
+ * 不直接管理 AlarmManager。业务职责分别交给：
+ *
+ * - data.RuleRepository：规则和日志持久化
+ * - scheduler.AutomationScheduler：时间/间隔触发调度
+ * - engine.RuleEngine：规则执行编排
+ *
+ * 这样界面以后即使改成 XML、Compose 或多 Activity，也不会影响核心自动化逻辑。
+ */
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private var tab: Tab = Tab.RULES

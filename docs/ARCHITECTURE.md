@@ -13,32 +13,56 @@ TaskPilot 是一个轻量自动化工具。核心模型与 MacroDroid 类似：
 
 第一版目标是建立稳定可扩展的骨架，而不是一次性实现所有高级能力。
 
+## 分层结构
+
+源码按职责分包：
+
+```text
+com.danielchang.taskpilot
+├─ model         数据模型和枚举
+├─ data          本地持久化
+├─ scheduler     AlarmManager 调度
+├─ receiver      Android 系统广播入口
+├─ notification  通知监听入口
+├─ engine        规则执行、条件判断、动作执行
+├─ system        系统状态读取封装
+└─ ui            原生 View 界面
+```
+
+这种结构让 UI、存储、调度和执行逻辑互相隔离。新增触发器时优先看 `receiver` 和 `scheduler`；新增条件时看 `engine/ConditionEvaluator.kt`；新增动作时看 `engine/ActionExecutor.kt`。
+
 ## 主要文件
 
-- `AutomationModels.kt`
+- `model/AutomationModels.kt`
   - 规则模型、触发器类型、条件类型、动作类型、执行日志模型。
 
-- `RuleRepository.kt`
+- `data/RuleRepository.kt`
   - 使用 `SharedPreferences` + JSON 保存总开关、规则列表和执行日志。
 
-- `AutomationScheduler.kt`
+- `scheduler/AutomationScheduler.kt`
   - 使用 `AlarmManager.setAlarmClock` 安排时间触发和间隔触发。
   - 使用 15 分钟周期检查电量阈值触发器。
 
-- `AutomationReceiver.kt`
+- `receiver/AutomationReceiver.kt`
   - 接收系统广播和自定义闹钟广播。
   - 将不同广播映射为不同触发器。
 
-- `RuleEngine.kt`
-  - 检查规则条件。
-  - 执行动作。
+- `engine/RuleEngine.kt`
+  - 规则执行编排。
+  - 调用条件评估器和动作执行器。
   - 写入执行日志。
 
-- `TaskPilotNotificationListener.kt`
+- `engine/ConditionEvaluator.kt`
+  - 集中读取系统状态并判断条件是否满足。
+
+- `engine/ActionExecutor.kt`
+  - 集中执行会改变系统状态的动作。
+
+- `notification/TaskPilotNotificationListener.kt`
   - 通知监听服务。
   - 用户需要手动授予通知使用权后才会生效。
 
-- `MainActivity.kt`
+- `ui/MainActivity.kt`
   - 原生 View 界面。
   - 提供规则、日志、权限、设置四个页面。
 
@@ -48,6 +72,7 @@ TaskPilot 是一个轻量自动化工具。核心模型与 MacroDroid 类似：
 - 不使用数据库，第一版规则数量有限，`SharedPreferences` 足够。
 - 时间触发使用 `setAlarmClock`，提高锁屏/熄屏触发可靠性。
 - 高风险能力先预留模型和入口，后续逐个增强。
+- 规则引擎采用编排器 + 条件评估器 + 动作执行器的拆分，避免单个类变成“上帝对象”。
 
 ## 数据结构
 

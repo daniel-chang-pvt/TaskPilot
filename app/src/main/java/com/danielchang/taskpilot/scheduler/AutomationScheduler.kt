@@ -1,9 +1,15 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.scheduler
 
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import com.danielchang.taskpilot.data.RuleRepository
+import com.danielchang.taskpilot.model.AutomationRule
+import com.danielchang.taskpilot.model.TriggerConfig
+import com.danielchang.taskpilot.model.TriggerType
+import com.danielchang.taskpilot.receiver.AutomationReceiver
+import com.danielchang.taskpilot.ui.MainActivity
 import java.util.Calendar
 
 object AutomationScheduler {

@@ -1,75 +1,34 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.engine
 
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
-import android.os.BatteryManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
 import android.telephony.SmsManager
 import android.widget.Toast
-import java.util.Calendar
+import com.danielchang.taskpilot.R
+import com.danielchang.taskpilot.model.ActionConfig
+import com.danielchang.taskpilot.model.ActionType
 import kotlin.math.roundToInt
 
-object RuleEngine {
+/**
+ * 动作执行器。
+ *
+ * 这里集中处理所有“会改变系统状态”的操作，例如铃声模式、音量、打开 App、发通知等。
+ * 规则引擎不直接碰系统 API，便于以后把动作扩展成“策略类”或动作链。
+ */
+object ActionExecutor {
     private const val CHANNEL_ID = "taskpilot_default"
 
-    fun executeRule(context: Context, rule: AutomationRule, source: String) {
-        if (!RuleRepository.isGlobalEnabled(context) || !rule.enabled) return
-        if (!checkCondition(context, rule.condition)) {
-            RuleRepository.addLog(context, rule, false, "条件不满足，来源：$source")
-            return
-        }
-        val result = runCatching { executeAction(context, rule.action) }
-        val message = result.fold(
-            onSuccess = { "执行成功：$it" },
-            onFailure = { "执行失败：${it.message}" }
-        )
-        RuleRepository.addLog(
-            context,
-            rule,
-            result.isSuccess,
-            message
-        )
-    }
-
-    fun executeMatching(context: Context, triggerType: TriggerType, sourceText: String, matcher: (AutomationRule) -> Boolean = { true }) {
-        RuleRepository.getRules(context)
-            .filter { it.enabled && it.trigger.type == triggerType && matcher(it) }
-            .forEach { executeRule(context, it, sourceText) }
-    }
-
-    private fun checkCondition(context: Context, condition: ConditionConfig): Boolean = when (condition.type) {
-        ConditionType.NONE -> true
-        ConditionType.TIME_RANGE -> isInTimeRange(condition)
-        ConditionType.WEEKDAY -> currentDayOfWeek() in 1..5
-        ConditionType.WEEKEND -> currentDayOfWeek() in 6..7
-        ConditionType.BATTERY_BELOW -> batteryPercent(context) < condition.percent
-        ConditionType.BATTERY_ABOVE -> batteryPercent(context) > condition.percent
-        ConditionType.CHARGING -> isCharging(context)
-        ConditionType.NOT_CHARGING -> !isCharging(context)
-        ConditionType.WIFI_CONNECTED -> NetworkState.isWifiConnected(context)
-        ConditionType.BLUETOOTH_ON -> BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
-        ConditionType.SCREEN_ON -> true
-        ConditionType.SCREEN_OFF -> true
-        ConditionType.RINGER_SILENT -> ringerMode(context) == AudioManager.RINGER_MODE_SILENT
-        ConditionType.RINGER_VIBRATE -> ringerMode(context) == AudioManager.RINGER_MODE_VIBRATE
-        ConditionType.RINGER_NORMAL -> ringerMode(context) == AudioManager.RINGER_MODE_NORMAL
-        ConditionType.IN_CALL -> false
-        ConditionType.NOT_IN_CALL -> true
-        ConditionType.HEADSET_PLUGGED -> false
-    }
-
-    private fun executeAction(context: Context, action: ActionConfig): String = when (action.type) {
+    fun execute(context: Context, action: ActionConfig): String = when (action.type) {
         ActionType.SET_RINGER_SILENT -> setRinger(context, AudioManager.RINGER_MODE_SILENT, "静音")
         ActionType.SET_RINGER_VIBRATE -> setRinger(context, AudioManager.RINGER_MODE_VIBRATE, "震动")
         ActionType.SET_RINGER_NORMAL -> setRinger(context, AudioManager.RINGER_MODE_NORMAL, "声音")
@@ -171,29 +130,11 @@ object RuleEngine {
 
     private fun vibrate(context: Context, millis: Long) {
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(millis, VibrationEffect.DEFAULT_AMPLITUDE)) else vibrator.vibrate(millis)
-    }
-
-    private fun ringerMode(context: Context): Int = (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager).ringerMode
-
-    private fun batteryPercent(context: Context): Int {
-        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return 100
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 100)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
-        return (level * 100 / scale.coerceAtLeast(1)).coerceIn(0, 100)
-    }
-
-    private fun isCharging(context: Context): Boolean {
-        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return false
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-        return status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-    }
-
-    private fun isInTimeRange(condition: ConditionConfig): Boolean {
-        val now = Calendar.getInstance()
-        val current = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        val start = condition.startHour * 60 + condition.startMinute
-        val end = condition.endHour * 60 + condition.endMinute
-        return if (start <= end) current in start..end else current >= start || current <= end
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(millis, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(millis)
+        }
     }
 }

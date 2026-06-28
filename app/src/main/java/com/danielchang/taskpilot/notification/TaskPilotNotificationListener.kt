@@ -1,7 +1,9 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.notification
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.danielchang.taskpilot.engine.RuleEngine
+import com.danielchang.taskpilot.model.TriggerType
 
 class TaskPilotNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {

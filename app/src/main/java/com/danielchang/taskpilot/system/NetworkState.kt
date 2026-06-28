@@ -1,4 +1,4 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.system
 
 import android.content.Context
 import android.net.ConnectivityManager

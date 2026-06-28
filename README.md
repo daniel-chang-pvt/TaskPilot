@@ -131,3 +131,16 @@ app-release.apk
 ```text
 docs/ARCHITECTURE.md
 ```
+
+## 代码结构
+
+```text
+model         数据模型和枚举
+data          SharedPreferences + JSON 持久化
+scheduler     AlarmManager 调度
+receiver      系统广播入口
+notification  通知监听入口
+engine        规则执行、条件判断、动作执行
+system        系统状态读取封装
+ui            原生 View 界面
+```

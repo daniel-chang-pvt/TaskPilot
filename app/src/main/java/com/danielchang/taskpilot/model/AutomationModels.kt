@@ -1,4 +1,4 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.model
 
 import android.content.Context
 import android.os.Build

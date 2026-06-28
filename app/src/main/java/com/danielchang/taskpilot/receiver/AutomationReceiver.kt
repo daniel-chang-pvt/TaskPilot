@@ -1,4 +1,4 @@
-package com.danielchang.taskpilot
+package com.danielchang.taskpilot.receiver
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -8,6 +8,11 @@ import android.content.Intent
 import android.os.BatteryManager
 import android.provider.Telephony
 import android.telephony.TelephonyManager
+import com.danielchang.taskpilot.data.RuleRepository
+import com.danielchang.taskpilot.engine.RuleEngine
+import com.danielchang.taskpilot.model.TriggerType
+import com.danielchang.taskpilot.scheduler.AutomationScheduler
+import com.danielchang.taskpilot.system.NetworkState
 
 class AutomationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
