@@ -46,5 +46,6 @@
     <string name="url_hint">网址</string>
     <string name="time_conflict_title">时间重复</string>
     <string name="time_conflict_message">同一时间只能有一条时间触发规则。</string>
+    <string name="monitor_running">自动化触发监控运行中</string>
     <string name="ok">知道了</string>
 </resources>

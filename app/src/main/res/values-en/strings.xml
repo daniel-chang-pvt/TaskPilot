@@ -46,5 +46,6 @@
     <string name="url_hint">URL</string>
     <string name="time_conflict_title">Duplicate time</string>
     <string name="time_conflict_message">Only one time trigger rule is allowed for the same time.</string>
+    <string name="monitor_running">Automation trigger monitor is running</string>
     <string name="ok">OK</string>
 </resources>

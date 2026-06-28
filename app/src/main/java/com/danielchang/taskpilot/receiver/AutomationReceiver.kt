@@ -2,6 +2,8 @@ package com.danielchang.taskpilot.receiver
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,6 +14,7 @@ import com.danielchang.taskpilot.data.RuleRepository
 import com.danielchang.taskpilot.engine.RuleEngine
 import com.danielchang.taskpilot.model.TriggerType
 import com.danielchang.taskpilot.scheduler.AutomationScheduler
+import com.danielchang.taskpilot.service.AutomationMonitorService
 import com.danielchang.taskpilot.system.NetworkState
 
 class AutomationReceiver : BroadcastReceiver() {
@@ -22,6 +25,7 @@ class AutomationReceiver : BroadcastReceiver() {
             AutomationScheduler.ACTION_BATTERY_CHECK -> handleBatteryCheck(context)
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 AutomationScheduler.scheduleAll(context)
+                AutomationMonitorService.start(context)
                 RuleEngine.executeMatching(context, TriggerType.BOOT, "boot")
             }
             Intent.ACTION_POWER_CONNECTED -> RuleEngine.executeMatching(context, TriggerType.POWER_CONNECTED, "power_connected")
@@ -32,7 +36,8 @@ class AutomationReceiver : BroadcastReceiver() {
             BluetoothAdapter.ACTION_STATE_CHANGED -> handleBluetoothState(context, intent)
             BluetoothDevice.ACTION_ACL_CONNECTED -> handleBluetoothDevice(context, intent, TriggerType.BLUETOOTH_DEVICE_CONNECTED)
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> handleBluetoothDevice(context, intent, TriggerType.BLUETOOTH_DEVICE_DISCONNECTED)
-            WifiManagerCompat.NETWORK_STATE_CHANGED_ACTION -> handleWifi(context)
+            AutomationMonitorService.NETWORK_STATE_CHANGED_ACTION,
+            AutomationMonitorService.CONNECTIVITY_ACTION -> handleWifi(context)
             Intent.ACTION_HEADSET_PLUG -> handleHeadset(context, intent)
             Telephony.Sms.Intents.SMS_RECEIVED_ACTION -> handleSms(context, intent)
             TelephonyManager.ACTION_PHONE_STATE_CHANGED -> handlePhone(context, intent)
@@ -64,7 +69,11 @@ class AutomationReceiver : BroadcastReceiver() {
 
     private fun handleBluetoothDevice(context: Context, intent: Intent, type: TriggerType) {
         val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-        val name = device?.name ?: ""
+        val name = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+            runCatching { device?.name.orEmpty() }.getOrDefault("")
+        } else {
+            ""
+        }
         RuleEngine.executeMatching(context, type, type.name) { it.trigger.text.isBlank() || name.contains(it.trigger.text, ignoreCase = true) }
     }
 
@@ -95,8 +104,4 @@ class AutomationReceiver : BroadcastReceiver() {
             TelephonyManager.EXTRA_STATE_IDLE -> RuleEngine.executeMatching(context, TriggerType.CALL_ENDED, "call_ended")
         }
     }
-}
-
-private object WifiManagerCompat {
-    const val NETWORK_STATE_CHANGED_ACTION = "android.net.wifi.STATE_CHANGE"
 }

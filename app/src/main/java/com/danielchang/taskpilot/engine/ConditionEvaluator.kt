@@ -1,6 +1,7 @@
 package com.danielchang.taskpilot.engine
 
 import android.bluetooth.BluetoothAdapter
+import android.content.pm.PackageManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -29,7 +30,7 @@ object ConditionEvaluator {
         ConditionType.CHARGING -> isCharging(context)
         ConditionType.NOT_CHARGING -> !isCharging(context)
         ConditionType.WIFI_CONNECTED -> NetworkState.isWifiConnected(context)
-        ConditionType.BLUETOOTH_ON -> BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+        ConditionType.BLUETOOTH_ON -> isBluetoothOn(context)
         ConditionType.SCREEN_ON -> true
         ConditionType.SCREEN_OFF -> true
         ConditionType.RINGER_SILENT -> ringerMode(context) == AudioManager.RINGER_MODE_SILENT
@@ -42,6 +43,13 @@ object ConditionEvaluator {
 
     private fun ringerMode(context: Context): Int =
         (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager).ringerMode
+
+    private fun isBluetoothOn(context: Context): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        return runCatching { BluetoothAdapter.getDefaultAdapter()?.isEnabled == true }.getOrDefault(false)
+    }
 
     private fun batteryPercent(context: Context): Int {
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return 100

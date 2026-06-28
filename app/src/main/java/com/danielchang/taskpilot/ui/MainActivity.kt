@@ -7,11 +7,13 @@ import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
@@ -37,6 +39,7 @@ import com.danielchang.taskpilot.model.TriggerType
 import com.danielchang.taskpilot.model.isEnglish
 import com.danielchang.taskpilot.model.label
 import com.danielchang.taskpilot.scheduler.AutomationScheduler
+import com.danielchang.taskpilot.service.AutomationMonitorService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +56,11 @@ import java.util.Locale
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private var tab: Tab = Tab.RULES
+    private var settingsPage: SettingsPage = SettingsPage.MAIN
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase.withSelectedLanguage())
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,7 +69,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (RuleRepository.isGlobalEnabled(this)) AutomationScheduler.scheduleAll(this)
+        if (RuleRepository.isGlobalEnabled(this)) {
+            AutomationMonitorService.start(this)
+            AutomationScheduler.scheduleAll(this)
+        }
         if (::root.isInitialized) render()
     }
 
@@ -86,7 +97,6 @@ class MainActivity : Activity() {
         when (tab) {
             Tab.RULES -> renderRules()
             Tab.LOGS -> renderLogs()
-            Tab.PERMISSIONS -> renderPermissions()
             Tab.SETTINGS -> renderSettings()
         }
     }
@@ -99,6 +109,7 @@ class MainActivity : Activity() {
                 isEnabled = item != tab
                 setOnClickListener {
                     tab = item
+                    settingsPage = SettingsPage.MAIN
                     render()
                 }
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -428,11 +439,23 @@ class MainActivity : Activity() {
     }
 
     private fun renderLogs() {
-        root.addView(TextView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(TextView(this).apply {
             text = getString(R.string.execution_log)
             textSize = 22f
             typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(Button(this).apply {
+            text = t("清理日志", "Clear")
+            setOnClickListener {
+                RuleRepository.clearLogs(this@MainActivity)
+                render()
+            }
         })
+        root.addView(header)
         root.addSpace(8)
         val logs = RuleRepository.getLogs(this)
         if (logs.isEmpty()) {
@@ -452,6 +475,7 @@ class MainActivity : Activity() {
     }
 
     private fun renderPermissions() {
+        addBackToSettingsButton()
         root.addView(TextView(this).apply {
             text = getString(R.string.permissions_title)
             textSize = 22f
@@ -476,6 +500,30 @@ class MainActivity : Activity() {
             description = t("用于执行“显示通知”动作。", "Required by the Show Notification action."),
             actionText = getString(R.string.open_settings)
         ) { requestNotificationPermission() }
+        permissionRow(
+            title = t("通知使用权", "Notification access"),
+            granted = hasNotificationListenerAccess(),
+            description = t("用于检测“收到通知 / 通知包含文字”触发器。进入后允许“自动任务”。", "Required for Notification received/text triggers. Allow TaskPilot in settings."),
+            actionText = getString(R.string.open_settings)
+        ) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+        permissionRow(
+            title = t("短信权限", "SMS permissions"),
+            granted = hasPermissions(smsPermissions()),
+            description = t("用于“收到短信 / 短信包含关键词”触发器和“发送短信”动作。", "Required for SMS triggers and the Send SMS action."),
+            actionText = getString(R.string.open_settings)
+        ) { requestRuntimePermissions(smsPermissions(), 1002) }
+        permissionRow(
+            title = t("电话权限", "Phone permissions"),
+            granted = hasPermissions(phonePermissions()),
+            description = t("用于来电、通话结束触发器和拨打电话动作。", "Required for call triggers and the Call phone action."),
+            actionText = getString(R.string.open_settings)
+        ) { requestRuntimePermissions(phonePermissions(), 1003) }
+        permissionRow(
+            title = t("附近设备/蓝牙权限", "Nearby devices / Bluetooth"),
+            granted = hasPermissions(bluetoothPermissions()),
+            description = t("Android 12 及以上用于读取蓝牙设备连接和设备名。", "Required on Android 12+ to read Bluetooth device connections and names."),
+            actionText = getString(R.string.open_settings)
+        ) { requestRuntimePermissions(bluetoothPermissions(), 1004) }
         permissionRow(
             title = getString(R.string.usage_access),
             granted = hasUsageAccess(),
@@ -522,15 +570,65 @@ class MainActivity : Activity() {
     }
 
     private fun renderSettings() {
+        when (settingsPage) {
+            SettingsPage.MAIN -> renderSettingsMain()
+            SettingsPage.PERMISSIONS -> renderPermissions()
+        }
+    }
+
+    private fun renderSettingsMain() {
         root.addView(TextView(this).apply {
             text = getString(R.string.settings_title)
             textSize = 22f
             typeface = Typeface.DEFAULT_BOLD
         })
         root.addSpace(8)
-        root.addView(TextView(this).apply { text = getString(R.string.language_note) })
+        root.addView(Button(this).apply {
+            text = t("语言选择", "Language") + "：" + languageLabel(RuleRepository.getLanguage(this@MainActivity))
+            setOnClickListener { showLanguageChooser() }
+        })
+        root.addSpace(8)
+        root.addView(Button(this).apply {
+            text = t("权限设置", "Permissions")
+            setOnClickListener {
+                settingsPage = SettingsPage.PERMISSIONS
+                render()
+            }
+        })
         root.addSpace(8)
         root.addView(TextView(this).apply { text = "${getString(R.string.version_label)}：1.0" })
+    }
+
+    private fun addBackToSettingsButton() {
+        root.addView(Button(this).apply {
+            text = t("返回设置", "Back to settings")
+            setOnClickListener {
+                settingsPage = SettingsPage.MAIN
+                render()
+            }
+        })
+        root.addSpace(8)
+    }
+
+    private fun showLanguageChooser() {
+        val values = arrayOf(RuleRepository.LANGUAGE_SYSTEM, RuleRepository.LANGUAGE_ZH, RuleRepository.LANGUAGE_EN)
+        val labels = values.map { languageLabel(it) }.toTypedArray()
+        val selected = values.indexOf(RuleRepository.getLanguage(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(t("语言选择", "Language"))
+            .setSingleChoiceItems(labels, selected) { dialog, which ->
+                dialog.dismiss()
+                RuleRepository.setLanguage(this, values[which])
+                recreate()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun languageLabel(language: String): String = when (language) {
+        RuleRepository.LANGUAGE_ZH -> t("中文", "Chinese")
+        RuleRepository.LANGUAGE_EN -> t("英文", "English")
+        else -> t("跟随系统", "System")
     }
 
     private fun <T> chooseEnum(title: String, values: Array<T>, selected: T, label: (T) -> String, onSelected: (T) -> Unit) {
@@ -588,6 +686,26 @@ class MainActivity : Activity() {
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
     }
+
+    private fun hasNotificationListenerAccess(): Boolean {
+        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
+        return enabled.contains(packageName, ignoreCase = true)
+    }
+
+    private fun hasPermissions(permissions: Array<String>): Boolean =
+        permissions.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    private fun requestRuntimePermissions(permissions: Array<String>, requestCode: Int) {
+        val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
+        if (missing.isNotEmpty()) requestPermissions(missing, requestCode)
+    }
+
+    private fun smsPermissions(): Array<String> = arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.SEND_SMS)
+
+    private fun phonePermissions(): Array<String> = arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.CALL_PHONE)
+
+    private fun bluetoothPermissions(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) arrayOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyArray()
 
     private fun hasUsageAccess(): Boolean {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -681,13 +799,33 @@ class MainActivity : Activity() {
         }
 
     private enum class Tab {
-        RULES, LOGS, PERMISSIONS, SETTINGS;
+        RULES, LOGS, SETTINGS;
 
         fun label(context: Context): String = when (this) {
             RULES -> context.getString(R.string.tab_rules)
             LOGS -> context.getString(R.string.tab_logs)
-            PERMISSIONS -> context.getString(R.string.tab_permissions)
             SETTINGS -> context.getString(R.string.tab_settings)
         }
     }
+
+    private enum class SettingsPage {
+        MAIN, PERMISSIONS
+    }
+}
+
+private fun Context.withSelectedLanguage(): Context {
+    val locale = when (RuleRepository.getLanguage(this)) {
+        RuleRepository.LANGUAGE_ZH -> Locale.SIMPLIFIED_CHINESE
+        RuleRepository.LANGUAGE_EN -> Locale.ENGLISH
+        else -> return this
+    }
+    Locale.setDefault(locale)
+    val config = Configuration(resources.configuration)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        config.setLocales(LocaleList(locale))
+    } else {
+        @Suppress("DEPRECATION")
+        config.locale = locale
+    }
+    return createConfigurationContext(config)
 }

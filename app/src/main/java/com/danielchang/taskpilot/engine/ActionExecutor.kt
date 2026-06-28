@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
@@ -93,7 +95,9 @@ object ActionExecutor {
     }
 
     private fun showToast(context: Context, text: String): String {
-        Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
+        }
         vibrate(context, 80)
         return "已弹出提示：$text"
     }

@@ -2,6 +2,7 @@ package com.danielchang.taskpilot.model
 
 import android.content.Context
 import android.os.Build
+import com.danielchang.taskpilot.data.RuleRepository
 import java.util.Calendar
 import java.util.Locale
 
@@ -128,6 +129,10 @@ fun ConditionType.label(context: Context): String = if (context.isEnglish()) en 
 fun ActionType.label(context: Context): String = if (context.isEnglish()) en else zh
 
 fun Context.isEnglish(): Boolean {
+    when (RuleRepository.getLanguage(this)) {
+        RuleRepository.LANGUAGE_ZH -> return false
+        RuleRepository.LANGUAGE_EN -> return true
+    }
     val locale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         resources.configuration.locales[0] ?: Locale.getDefault()
     } else {

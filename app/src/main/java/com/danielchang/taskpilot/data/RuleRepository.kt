@@ -10,6 +10,7 @@ import com.danielchang.taskpilot.model.ExecutionLog
 import com.danielchang.taskpilot.model.TriggerConfig
 import com.danielchang.taskpilot.model.TriggerType
 import com.danielchang.taskpilot.scheduler.AutomationScheduler
+import com.danielchang.taskpilot.service.AutomationMonitorService
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -18,13 +19,24 @@ object RuleRepository {
     private const val KEY_GLOBAL_ENABLED = "global_enabled"
     private const val KEY_RULES = "rules"
     private const val KEY_LOGS = "logs"
+    private const val KEY_LANGUAGE = "language"
     private const val MAX_LOGS = 300
+
+    const val LANGUAGE_SYSTEM = "system"
+    const val LANGUAGE_ZH = "zh"
+    const val LANGUAGE_EN = "en"
 
     fun isGlobalEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_GLOBAL_ENABLED, false)
 
     fun setGlobalEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_GLOBAL_ENABLED, enabled).apply()
-        if (enabled) AutomationScheduler.scheduleAll(context) else AutomationScheduler.cancelAll(context)
+        if (enabled) {
+            AutomationMonitorService.start(context)
+            AutomationScheduler.scheduleAll(context)
+        } else {
+            AutomationMonitorService.stop(context)
+            AutomationScheduler.cancelAll(context)
+        }
     }
 
     fun getRules(context: Context): List<AutomationRule> {
@@ -41,7 +53,13 @@ object RuleRepository {
         val array = JSONArray()
         rules.sortedWith(compareBy<AutomationRule> { it.category }.thenBy { it.name }).forEach { array.put(it.toJson()) }
         prefs(context).edit().putString(KEY_RULES, array.toString()).apply()
-        if (isGlobalEnabled(context)) AutomationScheduler.scheduleAll(context) else AutomationScheduler.cancelAll(context)
+        if (isGlobalEnabled(context)) {
+            AutomationMonitorService.start(context)
+            AutomationScheduler.scheduleAll(context)
+        } else {
+            AutomationMonitorService.stop(context)
+            AutomationScheduler.cancelAll(context)
+        }
     }
 
     fun upsertRule(context: Context, rule: AutomationRule) {
@@ -103,6 +121,20 @@ object RuleRepository {
             })
         }
         prefs(context).edit().putString(KEY_LOGS, array.toString()).apply()
+    }
+
+    fun clearLogs(context: Context) {
+        prefs(context).edit().remove(KEY_LOGS).apply()
+    }
+
+    fun getLanguage(context: Context): String = prefs(context).getString(KEY_LANGUAGE, LANGUAGE_SYSTEM) ?: LANGUAGE_SYSTEM
+
+    fun setLanguage(context: Context, language: String) {
+        val normalized = when (language) {
+            LANGUAGE_ZH, LANGUAGE_EN -> language
+            else -> LANGUAGE_SYSTEM
+        }
+        prefs(context).edit().putString(KEY_LANGUAGE, normalized).apply()
     }
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
